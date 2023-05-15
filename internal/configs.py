@@ -52,6 +52,7 @@ class Config:
   near: float = 2.  # Near plane distance.
   far: float = 6.  # Far plane distance.
   checkpoint_dir: Optional[str] = None  # Where to log checkpoints.
+  saveimage_dir: Optional[str] = None
   render_dir: Optional[str] = None  # Output rendering directory.
   data_dir: Optional[str] = None  # Input data directory.
   vocab_tree_path: Optional[str] = None  # Path to vocab tree for COLMAP.

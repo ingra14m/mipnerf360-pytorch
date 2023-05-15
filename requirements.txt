@@ -8,3 +8,4 @@ rawpy
 mediapy
 flatdict
 scipy
+imageio==2.27.0

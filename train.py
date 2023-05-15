@@ -37,6 +37,7 @@ from internal import models
 from internal import train_utils
 from internal import utils
 from internal import vis
+import imageio
 
 configs.define_common_flags()
 FLAGS = flags.FLAGS
@@ -79,7 +80,7 @@ def main(unused_argv):
     # load saved checkpoint or create checkpoint dir if not there
     if utils.isdir(config.checkpoint_dir):
         files = sorted([f for f in os.listdir(config.checkpoint_dir)
-                 if f.startswith('checkpoint')], key=lambda x: int(x.split('_')[-1]))
+                        if f.startswith('checkpoint')], key=lambda x: int(x.split('_')[-1]))
         # if there are checkpoints in the dir, load the latest checkpoint
         if files:
             checkpoint_name = files[-1]
@@ -89,6 +90,9 @@ def main(unused_argv):
             lr_scheduler.load_state_dict(state['lr_scheduler'])
     else:
         utils.makedirs(config.checkpoint_dir)
+
+    if not utils.isdir(config.saveimage_dir):
+        utils.makedirs(config.saveimage_dir)
 
     # setup logging to file
     logfile = os.path.join(config.checkpoint_dir, 'output.log')
@@ -145,10 +149,10 @@ def main(unused_argv):
         )
 
         # if step % config.gc_every == 0:
-            # Disable automatic garbage collection for efficiency.
-            # gc.collect()
+        # Disable automatic garbage collection for efficiency.
+        # gc.collect()
 
-        #TODO: Redundant?
+        # TODO: Redundant?
         del batch
         gc.collect()
         torch.cuda.empty_cache()
@@ -206,9 +210,9 @@ def main(unused_argv):
                 summary_writer.add_scalar('train_steps_per_sec', steps_per_sec, step)
                 summary_writer.add_scalar('train_rays_per_sec', rays_per_sec, step)
                 summary_writer.add_scalar('train_avg_psnr_timed', avg_stats['psnr'],
-                                    total_time // TIME_PRECISION)
+                                          total_time // TIME_PRECISION)
                 summary_writer.add_scalar('train_avg_psnr_timed_approx', avg_stats['psnr'],
-                                    approx_total_time // TIME_PRECISION)
+                                          approx_total_time // TIME_PRECISION)
                 precision = int(np.ceil(np.log10(config.max_steps))) + 1
                 avg_loss = avg_stats['loss']
                 avg_psnr = avg_stats['psnr']
@@ -217,11 +221,12 @@ def main(unused_argv):
                     for k, v in avg_stats.items()
                     if k.startswith('losses/')
                 }
-                logging.info(f'{step:{precision}d}' + f'/{config.max_steps:d}: ' +
-                    f'loss={avg_loss:0.5f}, ' + f'psnr={avg_psnr:6.3f}, ' +
-                    f'lr={lr_scheduler.get_last_lr()[0]:0.2e} | ' +
-                    ', '.join([f'{k}={s}' for k, s in str_losses.items()]) +
-                    f', {rays_per_sec:0.0f} r/s')
+                with open(os.path.join(config.checkpoint_dir, 'train_log'), 'a') as f:
+                    f.write(f'{step:{precision}d}' + f'/{config.max_steps:d}: ' +
+                            f'loss={avg_loss:0.5f}, ' + f'psnr={avg_psnr:6.3f}, ' +
+                            f'lr={lr_scheduler.get_last_lr()[0]:0.2e} | ' +
+                            ', '.join([f'{k}={s}' for k, s in str_losses.items()]) +
+                            f', {rays_per_sec:0.0f} r/s' + '\n')
 
                 # Reset everything we are tracking between summarizations.
                 reset_stats = True
@@ -271,6 +276,9 @@ def main(unused_argv):
                 # Log images to tensorboard.
                 vis_start_time = time.time()
                 vis_suite = vis.visualize_suite(rendering, test_case.rays)
+                item = np.array(vis_suite['color'])
+                filename = os.path.join(config.saveimage_dir, '{}_{}.png'.format('color', step))
+                imageio.imwrite(filename, item)
                 logging.info(f'Visualized in {(time.time() - vis_start_time):0.3f}s')
                 summary_writer.add_image(
                     'test_true_color', test_case.rgb, step, dataformats='HWC')
