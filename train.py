@@ -191,10 +191,6 @@ def main(unused_argv):
                         for i, vi in enumerate(tuple(v.T)):
                             stats_split[f'{k}/{i}'] = vi
 
-                # Summarize the entire histogram of each statistic.
-                for k, v in stats_split.items():
-                    summary_writer.add_histogram('train_' + k, v, step)
-
                 # Take the mean and max of each statistic since the last summary.
                 avg_stats = {k: torch.mean(v) for k, v in stats_split.items()}
                 max_stats = {k: torch.max(v) for k, v in stats_split.items()}
