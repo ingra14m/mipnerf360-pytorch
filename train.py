@@ -272,7 +272,7 @@ def main(unused_argv):
                 # Log images to tensorboard.
                 vis_start_time = time.time()
                 vis_suite = vis.visualize_suite(rendering, test_case.rays)
-                item = np.array(vis_suite['color'])
+                item = np.array(vis_suite['color'].detach().cpu())
                 filename = os.path.join(config.saveimage_dir, '{}_{}.png'.format('color', step))
                 imageio.imwrite(filename, item)
                 logging.info(f'Visualized in {(time.time() - vis_start_time):0.3f}s')
