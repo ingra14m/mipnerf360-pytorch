@@ -59,32 +59,32 @@ def inv_contract(z):
 #   fn_cov = torch.vmap(lin_fn, -1, -2)(torch.vmap(lin_fn, -1, -2)(cov))
 #   return fn_mean, fn_cov
 # TODO may not be correctly running
-def track_linearize(fn, mean, cov):
-  """Apply function `fn` to a set of means and covariances, ala a Kalman filter.
-
-  Args:
-      fn: the function applied to the Gaussians parameterized by (mean, cov).
-      mean: a tensor of means, where the last axis is the dimension.
-      cov: a tensor of covariances, where the last two axes are the dimensions.
-
-  Returns:
-      fn_mean: the transformed means.
-      fn_cov: the transformed covariances.
-  """
-  if (len(mean.shape) + 1) != len(cov.shape):
-    raise ValueError('cov must be non-diagonal')
-
-  # Linearize fn around mean
-  mean.requires_grad = True
-  y = fn(mean)
-  jacobian = torch.autograd.functional.jacobian(fn, mean)
-  lin_fn = lambda x: y + torch.matmul(jacobian, (x - mean).unsqueeze(-1)).squeeze(-1)
-
-  # Apply lin_fn to cov
-  fn_mean = lin_fn(mean)
-  fn_cov = torch.matmul(jacobian, torch.matmul(cov, jacobian.transpose(-1, -2)))
-
-  return fn_mean, fn_cov
+# def track_linearize(fn, mean, cov):
+#   """Apply function `fn` to a set of means and covariances, ala a Kalman filter.
+#
+#   Args:
+#       fn: the function applied to the Gaussians parameterized by (mean, cov).
+#       mean: a tensor of means, where the last axis is the dimension.
+#       cov: a tensor of covariances, where the last two axes are the dimensions.
+#
+#   Returns:
+#       fn_mean: the transformed means.
+#       fn_cov: the transformed covariances.
+#   """
+#   if (len(mean.shape) + 1) != len(cov.shape):
+#     raise ValueError('cov must be non-diagonal')
+#
+#   # Linearize fn around mean
+#   mean.requires_grad = True
+#   y = fn(mean)
+#   jacobian = torch.autograd.functional.jacobian(fn, mean)
+#   lin_fn = lambda x: y + torch.matmul(jacobian, (x - mean).unsqueeze(-1)).squeeze(-1)
+#
+#   # Apply lin_fn to cov
+#   fn_mean = lin_fn(mean)
+#   fn_cov = torch.matmul(jacobian, torch.matmul(cov, jacobian.transpose(-1, -2)))
+#
+#   return fn_mean, fn_cov
 
 
 def construct_ray_warps(fn, t_near, t_far):

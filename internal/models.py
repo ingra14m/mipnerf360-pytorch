@@ -106,7 +106,7 @@ class Model(nn.Module):
         self.bg_intensity_range = bg_intensity_range
         self.anneal_slope = anneal_slope
         self.use_viewdirs = use_viewdirs
-        self.raydist_fn = raydist_fn
+        self.raydist_fn = torch.reciprocal  # TODO
         self.ray_shape = ray_shape
         self.disable_integration = disable_integration
         self.single_jitter = single_jitter
@@ -527,8 +527,11 @@ class MLP(nn.Module):
         if self.training:
             means.requires_grad_()
 
-        if self.warp_fn is not None:
-            means, covs = coord
+        self.warp_fn = coord.contract
+
+        # TODO warp to suit
+        # if self.warp_fn is not None:
+        #     means, covs = coord.track_linearize(self.warp_fn, means, covs)
         # lift means and vars of position input
         lifted_means, lifted_vars = (
             coord.lift_and_diagonalize(means, covs, self.pos_basis_t))

@@ -157,7 +157,8 @@ def integrate_weights(w):
 def invert_cdf(u, t, w_logits, use_gpu_resampling=False):
     """Invert the CDF defined by (t, w) at the points specified by u in [0, 1)."""
     # Compute the PDF and CDF for each weight vector.
-    w = torch.nn.functional.softmax(w_logits, dim=-1)
+    w = torch.softmax(torch.tensor(w_logits), dim=-1)
+    # w = w.cpu().numpy()
     cw = integrate_weights(w)
     # Interpolate into the inverse CDF.
     interp_fn = math.interp if use_gpu_resampling else math.sorted_interp

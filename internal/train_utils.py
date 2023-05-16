@@ -228,9 +228,9 @@ def create_train_step(model: models.Model,
             losses['predicted_normals'] = predicted_normal_loss(
                 model, ray_history, config)
 
-        # TODO params may be deleted in the future
-        params = dict(model.named_parameters())
-        stats['weights_l2s'] = {k.replace('.', '/'): params[k].detach().norm() ** 2 for k in params}
+        # # TODO params may be deleted in the future
+        # params = dict(model.named_parameters())
+        # stats['weights_l2s'] = {k.replace('.', '/'): params[k].detach().norm() ** 2 for k in params}
 
         # Not used for original multinerf
         # if config.weight_decay_mults:
@@ -247,8 +247,8 @@ def create_train_step(model: models.Model,
         loss.backward()
 
         # calculate average grad and stats
-        stats['grad_norms'] = {k.replace('.', '/'): params[k].grad.detach().cpu().norm() for k in params}
-        stats['grad_maxes'] = {k.replace('.', '/'): params[k].grad.detach().cpu().abs().max() for k in params}
+        # stats['grad_norms'] = {k.replace('.', '/'): params[k].grad.detach().cpu().norm() for k in params}
+        # stats['grad_maxes'] = {k.replace('.', '/'): params[k].grad.detach().cpu().abs().max() for k in params}
 
         # Clip gradients
         if config.grad_max_val > 0:

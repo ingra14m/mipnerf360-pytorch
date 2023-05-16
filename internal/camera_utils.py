@@ -263,7 +263,7 @@ def generate_ellipse_path(poses: np.ndarray,
     if const_speed:
         # Resample theta angles so that the velocity is closer to constant.
         lengths = np.linalg.norm(positions[1:] - positions[:-1], axis=-1)
-        theta = stepfun.sample(None, theta, np.log(lengths), n_frames + 1)
+        theta = stepfun.sample(theta, np.log(lengths), n_frames + 1)
         positions = get_positions(theta)
 
     # Throw away duplicated last position.
