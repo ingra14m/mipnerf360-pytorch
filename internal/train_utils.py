@@ -99,6 +99,15 @@ def interlevel_loss(ray_history, config):
     return config.interlevel_loss_mult * loss_interlevel
 
 
+def distortion_loss(ray_history, config):
+    """Computes the distortion loss regularizer defined in mip-NeRF 360."""
+    last_ray_results = ray_history[-1]
+    c = last_ray_results['sdist'].detach()
+    w = last_ray_results['weights'].detach()
+    loss = torch.mean(stepfun.lossfun_distortion(c, w))
+    return config.distortion_loss_mult * loss
+
+
 def orientation_loss(rays, model, ray_history, config):
     """Computes the orientation loss regularizer defined in ref-NeRF."""
     total_loss = 0.
@@ -205,6 +214,9 @@ def create_train_step(model: models.Model,
         if config.interlevel_loss_mult > 0:
             losses['interlevel'] = interlevel_loss(ray_history, config)
 
+        if config.distortion_loss_mult > 0:
+            losses['distortion'] = distortion_loss(ray_history, config)
+
         # calculate normals orientation loss
         if (config.orientation_coarse_loss_mult > 0 or
                 config.orientation_loss_mult > 0):
@@ -217,8 +229,15 @@ def create_train_step(model: models.Model,
             losses['predicted_normals'] = predicted_normal_loss(
                 model, ray_history, config)
 
+        # TODO params may be deleted in the future
         params = dict(model.named_parameters())
         stats['weights_l2s'] = {k.replace('.', '/'): params[k].detach().norm() ** 2 for k in params}
+
+        # Not used for original multinerf
+        # if config.weight_decay_mults:
+        #     it = config.weight_decay_mults.items
+        #     losses['weight'] = torch.sum(
+        #         torch.stack([m * stats['weight_l2s'][k] for k, m in it()]))
 
         # calculate total loss
         loss = torch.sum(torch.stack(list(losses.values())))
@@ -246,7 +265,7 @@ def create_train_step(model: models.Model,
         # update learning rate
         lr_scheduler.step()
 
-        # TODO: difference between previous and current state - Redundant?
+        # Redundant Stats, I choose to delete it
         # stats['opt_update_norms'] = summarize_tree(opt_delta, tree_norm)
         # stats['opt_update_maxes'] = summarize_tree(opt_delta, tree_abs_max)
 
