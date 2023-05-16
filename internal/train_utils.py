@@ -43,7 +43,7 @@ def compute_data_loss(batch, renderings, rays, config):
     if config.disable_multiscale_loss:
         lossmult = torch.ones_like(lossmult)
     for rendering in renderings:
-        resid_sq = (rendering['rgb'] - torch.tensor(batch.rgb[..., :3]))**2
+        resid_sq = (rendering['rgb'] - torch.tensor(batch.rgb[..., :3])) ** 2
         denom = lossmult.sum()
         stats['mses'].append((lossmult * resid_sq).sum() / denom)
 
@@ -52,7 +52,7 @@ def compute_data_loss(batch, renderings, rays, config):
             data_loss = resid_sq
         elif config.data_loss_type == 'charb':
             # Charbonnier loss.
-            data_loss = torch.sqrt(resid_sq + config.charb_padding**2)
+            data_loss = torch.sqrt(resid_sq + config.charb_padding ** 2)
         else:
             assert False
         data_losses.append((lossmult * data_loss).sum() / denom)
@@ -61,7 +61,7 @@ def compute_data_loss(batch, renderings, rays, config):
             # Using mean to compute disparity, but other distance statistics can
             # be used instead.
             disp = 1 / (1 + rendering['distance_mean'])
-            stats['disparity_mses'].append(((disp - batch.disps)**2).mean())
+            stats['disparity_mses'].append(((disp - batch.disps) ** 2).mean())
 
         if config.compute_normal_metrics:
             if 'normals' in rendering:
@@ -112,7 +112,7 @@ def orientation_loss(rays, model, ray_history, config):
         # Negate viewdirs to represent normalized vectors from point to camera.
         v = -rays.viewdirs
         n_dot_v = (n * v[..., None, :]).sum(dim=-1)
-        loss = torch.mean((w * torch.minimum(zero, n_dot_v)**2).sum(dim=-1))
+        loss = torch.mean((w * torch.minimum(zero, n_dot_v) ** 2).sum(dim=-1))
         if i < model.num_levels - 1:
             total_loss += config.orientation_coarse_loss_mult * loss
         else:
@@ -159,12 +159,12 @@ def create_train_step(model: models.Model,
         camtype = dataset.camtype
 
     def train_step(
-        model,
-        optimizer,
-        lr_scheduler,
-        batch,
-        cameras,
-        train_frac,
+            model,
+            optimizer,
+            lr_scheduler,
+            batch,
+            cameras,
+            train_frac,
     ):
         """One optimization step.
 
@@ -182,7 +182,7 @@ def create_train_step(model: models.Model,
         rays = batch.rays
         if config.cast_rays_in_train_step:
             rays = camera_utils.cast_ray_batch(
-                cameras, rays, camtype, xnp=torch).to(device)
+                cameras, rays, camtype, xnp=torch).to(model.device)
         else:
             rays.to(model.device)
 
@@ -192,7 +192,7 @@ def create_train_step(model: models.Model,
         renderings, ray_history = model(
             rays,
             train_frac=train_frac,
-            compute_extras=\
+            compute_extras= \
                 config.compute_disp_metrics or config.compute_normal_metrics)
 
         losses = {}
@@ -218,7 +218,7 @@ def create_train_step(model: models.Model,
                 model, ray_history, config)
 
         params = dict(model.named_parameters())
-        stats['weights_l2s'] = {k.replace('.', '/') : params[k].detach().norm() ** 2 for k in params}
+        stats['weights_l2s'] = {k.replace('.', '/'): params[k].detach().norm() ** 2 for k in params}
 
         # calculate total loss
         loss = torch.sum(torch.stack(list(losses.values())))
@@ -229,8 +229,8 @@ def create_train_step(model: models.Model,
         loss.backward()
 
         # calculate average grad and stats
-        stats['grad_norms'] = {k.replace('.', '/') : params[k].grad.detach().cpu().norm() for k in params}
-        stats['grad_maxes'] = {k.replace('.', '/') : params[k].grad.detach().cpu().abs().max() for k in params}
+        stats['grad_norms'] = {k.replace('.', '/'): params[k].grad.detach().cpu().norm() for k in params}
+        stats['grad_maxes'] = {k.replace('.', '/'): params[k].grad.detach().cpu().abs().max() for k in params}
 
         # Clip gradients
         if config.grad_max_val > 0:
@@ -238,7 +238,7 @@ def create_train_step(model: models.Model,
         if config.grad_max_norm > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.grad_max_norm)
 
-        #TODO: set nan grads to 0
+        # TODO: set nan grads to 0
 
         # update the model weights
         optimizer.step()
@@ -246,7 +246,7 @@ def create_train_step(model: models.Model,
         # update learning rate
         lr_scheduler.step()
 
-        #TODO: difference between previous and current state - Redundant?
+        # TODO: difference between previous and current state - Redundant?
         # stats['opt_update_norms'] = summarize_tree(opt_delta, tree_norm)
         # stats['opt_update_maxes'] = summarize_tree(opt_delta, tree_abs_max)
 
@@ -284,18 +284,20 @@ def create_optimizer(
 
 def create_render_fn(model: models.Model):
     """Creates a function for full image rendering."""
+
     def render_eval_fn(train_frac, rays):
         return model(
             rays,
             train_frac=train_frac,
             compute_extras=True)
+
     return render_eval_fn
 
 
 def setup_model(
         config: configs.Config,
         dataset: Optional[datasets.Dataset] = None,
-    ):
+):
     """Creates NeRF model, optimizer, and pmap-ed train/render functions."""
 
     dummy_rays = utils.dummy_rays()
