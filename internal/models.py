@@ -132,7 +132,7 @@ class Model(nn.Module):
             train_frac,
             compute_extras,
     ):
-        """The Ref-NeRF Model.
+        """The MipNeRF-360 Model.
 
         Args:
           rays: util.Rays -> ray origins, directions, and viewdirs.
@@ -142,7 +142,7 @@ class Model(nn.Module):
         Returns:
           ret: list, [*(rgb, distance, acc)]
         """
-
+        NerfMLP()
         # Define the mapping from normalized to metric ray distance.
         _, s_to_t = coord.construct_ray_warps(
             self.raydist_fn, rays.near, rays.far)
@@ -446,10 +446,8 @@ class MLP(nn.Module):
         self.basis_subdivisions = basis_subdivisions
 
         # Make sure that normals are computed if reflection direction is used.
-        if self.use_reflections and not (self.enable_pred_normals or
-                                         not self.disable_density_normals):
-            raise ValueError(
-                'Normals must be computed for reflection directions.')
+        if self.use_reflections and not (self.enable_pred_normals or not self.disable_density_normals):
+            raise ValueError('Normals must be computed for reflection directions.')
 
         # Precompute and store (the transpose of) the basis being used.
         self.pos_basis_t = torch.tensor(
@@ -460,9 +458,7 @@ class MLP(nn.Module):
             self.dir_enc_fn = ref_utils.generate_ide_fn(self.deg_view)
         else:
             def dir_enc_fn(direction, _):
-                return coord.pos_enc(
-                    direction, min_deg=0, max_deg=self.deg_view,
-                    append_identity=True)
+                return coord.pos_enc(direction, min_deg=0, max_deg=self.deg_view, append_identity=True)
 
             self.dir_enc_fn = dir_enc_fn
 
@@ -482,12 +478,12 @@ class MLP(nn.Module):
             self.raw_roughness = nn.Linear(self.net_width, 1)
 
         # diffuse layer
-        if self.use_diffuse_color:
-            self.raw_rgb_diffuse = nn.Linear(self.net_width, self.num_rgb_channels)
+        # if self.use_diffuse_color:
+        #     self.raw_rgb_diffuse = nn.Linear(self.net_width, self.num_rgb_channels)
 
         # tint layer
-        if self.use_specular_tint:
-            self.raw_tint = nn.Linear(self.net_width, 3)
+        # if self.use_specular_tint:
+        #     self.raw_tint = nn.Linear(self.net_width, 3)
 
         # bottleneck layer
         if self.bottleneck_width > 0:
@@ -540,7 +536,6 @@ class MLP(nn.Module):
         # apply integrated position encoding to position input
         x = coord.integrated_pos_enc(lifted_means, lifted_vars,
                                      self.min_deg_point, self.max_deg_point)
-        inputs = x
 
         # Evaluate network to produce the output density.
         inputs = x
@@ -558,21 +553,13 @@ class MLP(nn.Module):
 
         # calculate normals through density gradients
         normals = None
-        # elif self.training:
-        #     # https://github.com/Enigmatisms/NeRF/blob/1c535492f89dccb483aa8810106733d2d6a9a52b/py/ref_model.py#L120
-        #     grad, = torch.autograd.grad(
-        #         raw_density, means, torch.ones_like(raw_density),
-        #         retain_graph=True)
-        #     grad_norm = grad.norm(dim=-1, keepdim=True)
-        #     normals = -ref_utils.l2_normalize(grad_norm)
-        # else:
-        #     normals = None
-        if not self.disable_density_normals and self.training:
-            # https://github.com/nerfstudio-project/nerfstudio/blob/main/nerfstudio/fields/base_field.py
-            raw_density.backward(
-                gradient=torch.ones_like(raw_density),
-                inputs=means, retain_graph=True)
-            normals = -ref_utils.l2_normalize(means.grad)
+        raw_grad_density = None
+        # if not self.disable_density_normals and self.training:
+        #     # https://github.com/nerfstudio-project/nerfstudio/blob/main/nerfstudio/fields/base_field.py
+        #     raw_density.backward(
+        #         gradient=torch.ones_like(raw_density),
+        #         inputs=means, retain_graph=True)
+        #     normals = -ref_utils.l2_normalize(means.grad)
 
         if self.enable_pred_normals:
             # predict normals
@@ -594,15 +581,15 @@ class MLP(nn.Module):
         else:
             if viewdirs is not None:
                 # Predict diffuse color.
-                if self.use_diffuse_color:
-                    raw_rgb_diffuse = self.raw_rgb_diffuse(x)
+                # if self.use_diffuse_color:
+                #     raw_rgb_diffuse = self.raw_rgb_diffuse(x)
 
-                if self.use_specular_tint:
-                    tint = torch.sigmoid(self.raw_tint(x))
+                # if self.use_specular_tint:
+                #     tint = torch.sigmoid(self.raw_tint(x))
 
-                if self.enable_pred_roughness:
-                    roughness = self.roughness_activation(
-                        self.raw_roughness(x) + self.roughness_bias)
+                # if self.enable_pred_roughness:
+                #     roughness = self.roughness_activation(
+                #         self.raw_roughness(x) + self.roughness_bias)
 
                 # Output of the first part of MLP.
                 if self.bottleneck_width > 0:
@@ -616,6 +603,7 @@ class MLP(nn.Module):
                     x = [bottleneck]
                 else:
                     x = []
+                # x = []
 
                 # Encode view (or reflection) directions.
                 if self.use_reflections:
@@ -640,11 +628,11 @@ class MLP(nn.Module):
                 x.append(dir_enc)
 
                 # Append dot product between normal vectors and view directions.
-                if self.use_n_dot_v:
-                    dotprod = torch.sum(
-                        normals_to_use * viewdirs[..., None, :],
-                        dim=-1, keepdims=True)
-                    x.append(dotprod)
+                # if self.use_n_dot_v:
+                #     dotprod = torch.sum(
+                #         normals_to_use * viewdirs[..., None, :],
+                #         dim=-1, keepdims=True)
+                #     x.append(dotprod)
 
                 # Concatenate bottleneck, directional encoding, and nv product
                 x = torch.cat(x, dim=-1)
@@ -662,19 +650,19 @@ class MLP(nn.Module):
             rgb = self.rgb_activation(
                 self.rgb_premultiplier * self.rgb(x) + self.rgb_bias)
 
-            if self.use_diffuse_color:
-                # Initialize linear diffuse color around 0.25, so that the combined
-                # linear color is initialized around 0.5.
-                three = torch.tensor(3.0, dtype=torch.float32)
-                diffuse_linear = torch.sigmoid(raw_rgb_diffuse - torch.log(three))
-                if self.use_specular_tint:
-                    specular_linear = tint * rgb
-                else:
-                    specular_linear = 0.5 * rgb
-
-                # Combine specular and diffuse components and tone map to sRGB.
-                rgb = torch.clip(
-                    image.linear_to_srgb(specular_linear + diffuse_linear), 0.0, 1.0)
+            # if self.use_diffuse_color:
+            #     # Initialize linear diffuse color around 0.25, so that the combined
+            #     # linear color is initialized around 0.5.
+            #     three = torch.tensor(3.0, dtype=torch.float32)
+            #     diffuse_linear = torch.sigmoid(raw_rgb_diffuse - torch.log(three))
+            #     if self.use_specular_tint:
+            #         specular_linear = tint * rgb
+            #     else:
+            #         specular_linear = 0.5 * rgb
+            #
+            #     # Combine specular and diffuse components and tone map to sRGB.
+            #     rgb = torch.clip(
+            #         image.linear_to_srgb(specular_linear + diffuse_linear), 0.0, 1.0)
 
             # Apply padding, mapping color to [-rgb_padding, 1+rgb_padding].
             rgb = rgb * (1 + 2 * self.rgb_padding) - self.rgb_padding
@@ -682,19 +670,24 @@ class MLP(nn.Module):
         ray_results = dict(
             density=density,
             rgb=rgb,
+            raw_grad_density=raw_grad_density,  # None
+            grad_pred=grad_pred,  # None
+            normals=normals,  # None
+            normals_pred=normals_pred,  # None
+            roughness=roughness,  # None
         )
-        if not self.disable_density_normals:
-            ray_results['normals'] = normals
-        if self.enable_pred_normals:
-            ray_results['normals_pred'] = normals_pred
-            ray_results['grad_pred'] = grad_pred
-        if self.use_specular_tint:
-            ray_results['tint'] = tint
-        if self.use_diffuse_color:
-            ray_results['diffuse'] = diffuse_linear
-            ray_results['specular'] = specular_linear
-        if self.enable_pred_roughness:
-            ray_results['roughness'] = roughness
+        # if not self.disable_density_normals:
+        #     ray_results['normals'] = normals
+        # if self.enable_pred_normals:
+        #     ray_results['normals_pred'] = normals_pred
+        #     ray_results['grad_pred'] = grad_pred
+        # # if self.use_specular_tint:
+        # #     ray_results['tint'] = tint
+        # # if self.use_diffuse_color:
+        # #     ray_results['diffuse'] = diffuse_linear
+        # #     ray_results['specular'] = specular_linear
+        # if self.enable_pred_roughness:
+        #     ray_results['roughness'] = roughness
 
         return ray_results
 

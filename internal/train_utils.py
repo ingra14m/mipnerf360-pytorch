@@ -201,8 +201,7 @@ def create_train_step(model: models.Model,
         renderings, ray_history = model(
             rays,
             train_frac=train_frac,
-            compute_extras= \
-                config.compute_disp_metrics or config.compute_normal_metrics)
+            compute_extras=config.compute_disp_metrics or config.compute_normal_metrics)
 
         losses = {}
 
