@@ -527,6 +527,8 @@ class MLP(nn.Module):
         if self.training:
             means.requires_grad_()
 
+        if self.warp_fn is not None:
+            means, covs = coord
         # lift means and vars of position input
         lifted_means, lifted_vars = (
             coord.lift_and_diagonalize(means, covs, self.pos_basis_t))

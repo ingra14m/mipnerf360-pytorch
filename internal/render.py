@@ -23,10 +23,10 @@ def lift_gaussian(d, t_mean, t_var, r_var, diag):
     mean = d[..., None, :] * t_mean[..., None]
 
     eps = torch.tensor(1e-10)
-    d_mag_sq = torch.maximum(eps, torch.sum(d**2, dim=-1, keepdims=True))
+    d_mag_sq = torch.maximum(eps, torch.sum(d ** 2, dim=-1, keepdims=True))
 
     if diag:
-        d_outer_diag = d**2
+        d_outer_diag = d ** 2
         null_outer_diag = 1 - d_outer_diag / d_mag_sq
         t_cov_diag = t_var[..., None] * d_outer_diag[..., None, :]
         xy_cov_diag = r_var[..., None] * null_outer_diag[..., None, :]
@@ -65,17 +65,17 @@ def conical_frustum_to_gaussian(d, t0, t1, base_radius, diag, stable=True):
         mu = (t0 + t1) / 2  # The average of the two `t` values.
         hw = (t1 - t0) / 2  # The half-width of the two `t` values.
         eps = torch.tensor(torch.finfo(torch.float32).eps)
-        t_mean = mu + (2 * mu * hw**2) / torch.maximum(eps, 3 * mu**2 + hw**2)
-        denom = torch.maximum(eps, 3 * mu**2 + hw**2)
-        t_var = (hw**2) / 3 - (4 / 15) * hw**4 * (12 * mu**2 - hw**2) / denom**2
-        r_var = (mu**2) / 4 + (5 / 12) * hw**2 - (4 / 15) * (hw**4) / denom
+        t_mean = mu + (2 * mu * hw ** 2) / torch.maximum(eps, 3 * mu ** 2 + hw ** 2)
+        denom = torch.maximum(eps, 3 * mu ** 2 + hw ** 2)
+        t_var = (hw ** 2) / 3 - (4 / 15) * hw ** 4 * (12 * mu ** 2 - hw ** 2) / denom ** 2
+        r_var = (mu ** 2) / 4 + (5 / 12) * hw ** 2 - (4 / 15) * (hw ** 4) / denom
     else:
         # Equations 37-39 in the paper.
-        t_mean = (3 * (t1**4 - t0**4)) / (4 * (t1**3 - t0**3))
-        r_var = 3 / 20 * (t1**5 - t0**5) / (t1**3 - t0**3)
-        t_mosq = 3 / 5 * (t1**5 - t0**5) / (t1**3 - t0**3)
-        t_var = t_mosq - t_mean**2
-    r_var *= base_radius**2
+        t_mean = (3 * (t1 ** 4 - t0 ** 4)) / (4 * (t1 ** 3 - t0 ** 3))
+        r_var = 3 / 20 * (t1 ** 5 - t0 ** 5) / (t1 ** 3 - t0 ** 3)
+        t_mosq = 3 / 5 * (t1 ** 5 - t0 ** 5) / (t1 ** 3 - t0 ** 3)
+        t_var = t_mosq - t_mean ** 2
+    r_var *= base_radius ** 2
     return lift_gaussian(d, t_mean, t_var, r_var, diag)
 
 
@@ -96,8 +96,8 @@ def cylinder_to_gaussian(d, t0, t1, radius, diag):
       a Gaussian (mean and covariance).
     """
     t_mean = (t0 + t1) / 2
-    r_var = radius**2 / 4
-    t_var = (t1 - t0)**2 / 12
+    r_var = radius ** 2 / 4
+    t_var = (t1 - t0) ** 2 / 12
     return lift_gaussian(d, t_mean, t_var, r_var, diag)
 
 
