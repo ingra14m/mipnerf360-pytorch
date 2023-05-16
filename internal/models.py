@@ -43,6 +43,7 @@ def reset_parameters(self) -> None:
     if self.bias is not None:
         nn.init.constant_(self.bias, val=0)
 
+
 nn.Linear.reset_parameters = reset_parameters
 
 
@@ -70,7 +71,7 @@ class Model(nn.Module):
             opaque_background: bool = False,
             init_s_near: float = 0.,
             init_s_far: float = 1.,
-            ):
+    ):
         """
         Initializes the mip-Nerf360 model
 
@@ -126,10 +127,10 @@ class Model(nn.Module):
         return next(self.parameters()).device
 
     def __call__(
-        self,
-        rays,
-        train_frac,
-        compute_extras,
+            self,
+            rays,
+            train_frac,
+            compute_extras,
     ):
         """The Ref-NeRF Model.
 
@@ -165,7 +166,7 @@ class Model(nn.Module):
             # Dilate by some multiple of the expected span of each current interval,
             # with some bias added in.
             dilation = self.dilation_bias + self.dilation_multiplier * (
-                self.init_s_far - self.init_s_near) / prod_num_samples
+                    self.init_s_far - self.init_s_near) / prod_num_samples
 
             # Record the product of the number of samples seen so far.
             prod_num_samples *= num_samples
@@ -193,7 +194,6 @@ class Model(nn.Module):
             else:
                 anneal = 1.
 
-
             # A slightly more stable way to compute weights**anneal. If the distance
             # between adjacent intervals is zero then its weight is fixed to 0.
             logits_resample = torch.where(
@@ -211,7 +211,7 @@ class Model(nn.Module):
                 single_jitter=self.single_jitter,
                 domain=(self.init_s_near, self.init_s_far),
                 use_gpu_resampling=False,
-                ).detach()
+            ).detach()
 
             # Convert normalized distances to metric distances.
             tdist = s_to_t(sdist)
@@ -229,7 +229,6 @@ class Model(nn.Module):
                 # Setting the covariance of our Gaussian samples to 0 disables the
                 # "integrated" part of integrated positional encoding.
                 gaussians = (gaussians[0], torch.zeros_like(gaussians[1]))
-
 
             # Push our Gaussians through one of our two MLPs.
             mlp = self.prop_mlp if is_prop else self.nerf_mlp
@@ -254,7 +253,7 @@ class Model(nn.Module):
             else:
                 # If rendering is deterministic, use the midpoint of the range.
                 bg_rgbs = (
-                    self.bg_intensity_range[0] + self.bg_intensity_range[1]) / 2
+                                  self.bg_intensity_range[0] + self.bg_intensity_range[1]) / 2
 
             # Render each ray.
             rendering = render.volumetric_rendering(
@@ -364,7 +363,7 @@ class MLP(nn.Module):
             warp_fn: Callable[..., Any] = None,
             basis_shape: str = 'icosahedron',
             basis_subdivisions: int = 2,
-        ):
+    ):
         """
         Initializes the PosEnc MLP
 
@@ -464,6 +463,7 @@ class MLP(nn.Module):
                 return coord.pos_enc(
                     direction, min_deg=0, max_deg=self.deg_view,
                     append_identity=True)
+
             self.dir_enc_fn = dir_enc_fn
 
         # spatial MLP
@@ -505,7 +505,7 @@ class MLP(nn.Module):
                  gaussians,
                  viewdirs=None,
                  imageplane=None,
-        ):
+                 ):
         """Evaluate the MLP.
 
         Args:
@@ -529,14 +529,14 @@ class MLP(nn.Module):
         """
         # get inputs in the form of means and variances representation the ray segments
         means, covs = gaussians
-        
+
         if self.training:
             means.requires_grad_()
 
         # lift means and vars of position input
         lifted_means, lifted_vars = (
             coord.lift_and_diagonalize(means, covs, self.pos_basis_t))
-        
+
         # apply integrated position encoding to position input
         x = coord.integrated_pos_enc(lifted_means, lifted_vars,
                                      self.min_deg_point, self.max_deg_point)
@@ -571,7 +571,7 @@ class MLP(nn.Module):
             # https://github.com/nerfstudio-project/nerfstudio/blob/main/nerfstudio/fields/base_field.py
             raw_density.backward(
                 gradient=torch.ones_like(raw_density),
-                inputs=means, retain_graph = True)
+                inputs=means, retain_graph=True)
             normals = -ref_utils.l2_normalize(means.grad)
 
         if self.enable_pred_normals:
@@ -657,7 +657,6 @@ class MLP(nn.Module):
                     if i % self.skip_layer == 0 and i > 0:
                         x = torch.concatenate([x, inputs], dim=-1)
 
-
             # If using diffuse/specular colors, then `rgb` is treated as linear
             # specular color. Otherwise it's treated as the color itself.
             rgb = self.rgb_activation(
@@ -711,8 +710,8 @@ class PropMLP(MLP):
 
 
 def render_image(render_fn: Callable[[torch.tensor, utils.Rays],
-                                     Tuple[List[Mapping[Text, torch.tensor]],
-                                           List[Tuple[torch.tensor, ...]]]],
+Tuple[List[Mapping[Text, torch.tensor]],
+List[Tuple[torch.tensor, ...]]]],
                  rays: utils.Rays,
                  config: configs.Config,
                  verbose: bool = True,
@@ -739,7 +738,7 @@ def render_image(render_fn: Callable[[torch.tensor, utils.Rays],
 
     for i_chunk, idx0 in enumerate(idx0s):
         if verbose and i_chunk % max(1, len(idx0s) // 10) == 0:
-            logging.info(f'Rendering chunk {i_chunk}/{len(idx0s)-1}')
+            logging.info(f'Rendering chunk {i_chunk}/{len(idx0s) - 1}')
         chunk_rays = rays[idx0:idx0 + config.render_chunk_size]
         chunk_rays.to(device)
         chunk_renderings, _ = render_fn(chunk_rays)
