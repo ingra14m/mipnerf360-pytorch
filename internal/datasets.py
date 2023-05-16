@@ -33,10 +33,10 @@ from PIL import Image
 
 # This is ugly, but it works.
 import sys
+
 sys.path.insert(0, 'internal/pycolmap')
 sys.path.insert(0, 'internal/pycolmap/pycolmap')
 import pycolmap
-
 
 
 def load_dataset(split, train_dir, config):
@@ -59,9 +59,9 @@ class NeRFSceneManager(pycolmap.SceneManager):
     """
 
     def process(
-        self
+            self
     ) -> Tuple[Sequence[Text], np.ndarray, np.ndarray, Optional[Mapping[
-            Text, float]], camera_utils.ProjectionType]:
+        Text, float]], camera_utils.ProjectionType]:
         """Applies NeRF-specific postprocessing to the loaded pose data.
 
         Returns:
@@ -251,7 +251,7 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
         self.daemon = True  # Sets parent Thread to be a daemon.
         self._patch_size = np.maximum(config.patch_size, 1)
         self._batch_size = config.batch_size
-        if self._patch_size**2 > self._batch_size:
+        if self._patch_size ** 2 > self._batch_size:
             raise ValueError(f'Patch size {self._patch_size}^2 too large for ' +
                              f'per-process batch size {self._batch_size}')
         self._batching = utils.BatchingMethod(config.batching)
@@ -392,8 +392,10 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
           This is the batch provided for one NeRF train or test iteration.
         """
 
-        def broadcast_scalar(x): return np.broadcast_to(
-            x, pix_x_int.shape)[..., None]
+        def broadcast_scalar(x):
+            return np.broadcast_to(
+                x, pix_x_int.shape)[..., None]
+
         ray_kwargs = {
             'lossmult': broadcast_scalar(1.) if lossmult is None else lossmult,
             'near': broadcast_scalar(self.near),
@@ -441,10 +443,10 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
         else:
             # Random pixel patch x-coordinates.
             pix_x_int = np.random.randint(lower_border, self.width - upper_border,
-                                        (num_patches, 1, 1))
+                                          (num_patches, 1, 1))
             # Random pixel patch y-coordinates.
             pix_y_int = np.random.randint(lower_border, self.height - upper_border,
-                                        (num_patches, 1, 1))
+                                          (num_patches, 1, 1))
             # Add patch coordinate offsets.
             # Shape will broadcast to (num_patches, _patch_size, _patch_size).
             patch_dx_int, patch_dy_int = camera_utils.pixel_coordinates(
@@ -540,7 +542,7 @@ class Blender(Dataset):
         self.height, self.width = self.images.shape[1:3]
         self.camtoworlds = np.stack(cams, axis=0)
         self.focal = .5 * self.width / \
-            np.tan(.5 * float(meta['camera_angle_x']))
+                     np.tan(.5 * float(meta['camera_angle_x']))
         self.pixtocams = camera_utils.get_pixtocam(self.focal, self.width,
                                                    self.height)
 
@@ -636,7 +638,7 @@ class LLFF(Dataset):
             # Recenter poses.
             poses, transform = camera_utils.recenter_poses(poses)
             self.colmap_to_world_transform = (
-                transform @ self.colmap_to_world_transform)
+                    transform @ self.colmap_to_world_transform)
             # Forward-facing spiral render path.
             self.render_poses = camera_utils.generate_spiral_path(
                 poses, bounds, n_frames=config.render_path_frames)
@@ -744,14 +746,16 @@ class TanksAndTemplesFVS(Dataset):
                 f'Factor {config.factor} larger than {len(sizes)}')
 
         basedir = os.path.join(basedir, sizes[config.factor])
-        def open_fn(f): return utils.open_file(os.path.join(basedir, f), 'rb')
+
+        def open_fn(f):
+            return utils.open_file(os.path.join(basedir, f), 'rb')
 
         files = [f for f in sorted(
             utils.listdir(basedir)) if f.startswith('im_')]
         if render_only:
             files = files[:1]
         images = np.array([np.array(Image.open(open_fn(f)))
-                          for f in files]) / 255.
+                           for f in files]) / 255.
 
         names = ['Ks', 'Rs', 'ts']
         intrinsics, rot, trans = (np.load(open_fn(f'{n}.npy')) for n in names)
@@ -835,7 +839,7 @@ class DTU(Dataset):
 
             # Decompose projection matrix into pose and camera matrix.
             camera_mat, rot_mat, t = cv2.decomposeProjectionMatrix(projection)[
-                :3]
+                                     :3]
             camera_mat = camera_mat / camera_mat[2, 2]
             pose = np.eye(4, dtype=np.float32)
             pose[:3, :3] = rot_mat.transpose()
