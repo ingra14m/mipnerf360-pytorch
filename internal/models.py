@@ -142,7 +142,6 @@ class Model(nn.Module):
         Returns:
           ret: list, [*(rgb, distance, acc)]
         """
-        NerfMLP()
         # Define the mapping from normalized to metric ray distance.
         _, s_to_t = coord.construct_ray_warps(
             self.raydist_fn, rays.near, rays.far)
@@ -252,8 +251,7 @@ class Model(nn.Module):
                 bg_rgbs = self.bg_intensity_range[0]
             else:
                 # If rendering is deterministic, use the midpoint of the range.
-                bg_rgbs = (
-                                  self.bg_intensity_range[0] + self.bg_intensity_range[1]) / 2
+                bg_rgbs = (self.bg_intensity_range[0] + self.bg_intensity_range[1]) / 2
 
             # Render each ray.
             rendering = render.volumetric_rendering(

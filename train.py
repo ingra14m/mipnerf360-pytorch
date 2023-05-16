@@ -57,8 +57,8 @@ def main(unused_argv):
         torch.set_default_tensor_type('torch.FloatTensor')
 
     # set random seeds for reproducibility
-    torch.manual_seed(20221216)
-    np.random.seed(20221216)
+    torch.manual_seed(20230515)
+    np.random.seed(20230515)
 
     # load training and test sets
     dataset = datasets.load_dataset('train', config.data_dir, config)
