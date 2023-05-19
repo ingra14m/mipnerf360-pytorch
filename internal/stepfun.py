@@ -86,12 +86,13 @@ def lossfun_outer(t, w, t_env, w_env, eps=torch.finfo(torch.float32).eps):
     # We assume w_inner <= w <= w_outer. We don't penalize w_inner because it's
     # more effective to pull w_outer up than it is to push w_inner down.
     # Scaled half-quadratic loss that gives a constant gradient at w_outer = 0.
-    return torch.maximum(torch.tensor(.0), w - w_outer)**2 / (w + eps)
+    return torch.maximum(torch.tensor(.0), w - w_outer) ** 2 / (w + eps)
 
 
-def weight_to_pdf(t, w, eps=torch.tensor(torch.finfo(torch.float32).eps**2)):
+def weight_to_pdf(t, w):
     """Turn a vector of weights that sums to 1 into a PDF that integrates to 1."""
-    return w / torch.maximum(eps, (t[..., 1:] - t[..., :-1]))
+    eps = torch.finfo(t.dtype).eps
+    return w / (t[..., 1:] - t[..., :-1]).clamp_min(eps)
 
 
 def pdf_to_weight(t, p):
@@ -99,35 +100,100 @@ def pdf_to_weight(t, p):
     return p * (t[..., 1:] - t[..., :-1])
 
 
-def max_dilate(t, w, dilation, domain=(-torch.tensor(float('inf')),
-                                       torch.tensor(float('inf')))):
+def max_dilate(t, w, dilation, domain=(-torch.inf, torch.inf)):
     """Dilate (via max-pooling) a non-negative step function."""
     t0 = t[..., :-1] - dilation
     t1 = t[..., 1:] + dilation
-    t_dilate = torch.sort(torch.cat([t, t0, t1], dim=-1), dim=-1).values
+    t_dilate, _ = torch.sort(torch.cat([t, t0, t1], dim=-1), dim=-1)
     t_dilate = torch.clip(t_dilate, *domain)
     w_dilate = torch.max(
         torch.where(
             (t0[..., None, :] <= t_dilate[..., None])
             & (t1[..., None, :] > t_dilate[..., None]),
-            w[..., None, :], 0), dim=-1).values[..., :-1]
+            w[..., None, :],
+            torch.zeros_like(w[..., None, :]),
+        ), dim=-1).values[..., :-1]
     return t_dilate, w_dilate
 
 
-def max_dilate_weights(
-        t,
-        w,
-        dilation,
-        domain=(-torch.tensor(float('inf')), torch.tensor(float('inf'))),
-        renormalize=False,
-        eps=torch.tensor(torch.finfo(torch.float32).eps**2)):
+def sample_np(rand,
+              t,
+              w_logits,
+              num_samples,
+              single_jitter=False,
+              deterministic_center=False):
+    """
+    numpy version of sample()
+  """
+    eps = np.finfo(np.float32).eps
+
+    # Draw uniform samples.
+    if not rand:
+        if deterministic_center:
+            pad = 1 / (2 * num_samples)
+            u = np.linspace(pad, 1. - pad - eps, num_samples)
+        else:
+            u = np.linspace(0, 1. - eps, num_samples)
+        u = np.broadcast_to(u, t.shape[:-1] + (num_samples,))
+    else:
+        # `u` is in [0, 1) --- it can be zero, but it can never be 1.
+        u_max = eps + (1 - eps) / num_samples
+        max_jitter = (1 - u_max) / (num_samples - 1) - eps
+        d = 1 if single_jitter else num_samples
+        u = np.linspace(0, 1 - u_max, num_samples) + \
+            np.random.rand(*t.shape[:-1], d) * max_jitter
+
+    return invert_cdf_np(u, t, w_logits)
+
+
+def integrate_weights_np(w):
+    """Compute the cumulative sum of w, assuming all weight vectors sum to 1.
+
+  The output's size on the last dimension is one greater than that of the input,
+  because we're computing the integral corresponding to the endpoints of a step
+  function, not the integral of the interior/bin values.
+
+  Args:
+    w: Tensor, which will be integrated along the last axis. This is assumed to
+      sum to 1 along the last axis, and this function will (silently) break if
+      that is not the case.
+
+  Returns:
+    cw0: Tensor, the integral of w, where cw0[..., 0] = 0 and cw0[..., -1] = 1
+  """
+    cw = np.minimum(1, np.cumsum(w[..., :-1], axis=-1))
+    shape = cw.shape[:-1] + (1,)
+    # Ensure that the CDF starts with exactly 0 and ends with exactly 1.
+    cw0 = np.concatenate([np.zeros(shape), cw,
+                          np.ones(shape)], axis=-1)
+    return cw0
+
+
+def invert_cdf_np(u, t, w_logits):
+    """Invert the CDF defined by (t, w) at the points specified by u in [0, 1)."""
+    # Compute the PDF and CDF for each weight vector.
+    w = np.exp(w_logits) / np.exp(w_logits).sum(axis=-1, keepdims=True)
+    cw = integrate_weights_np(w)
+    # Interpolate into the inverse CDF.
+    interp_fn = np.interp
+    t_new = interp_fn(u, cw, t)
+    return t_new
+
+
+def max_dilate_weights(t,
+                       w,
+                       dilation,
+                       domain=(-torch.inf, torch.inf),
+                       renormalize=False):
     """Dilate (via max-pooling) a set of weights."""
+    eps = torch.finfo(w.dtype).eps
+    # eps = 1e-3
+
     p = weight_to_pdf(t, w)
     t_dilate, p_dilate = max_dilate(t, p, dilation, domain=domain)
     w_dilate = pdf_to_weight(t_dilate, p_dilate)
     if renormalize:
-        w_dilate /= torch.maximum(eps,
-                                  torch.sum(w_dilate, dim=-1, keepdims=True))
+        w_dilate /= torch.sum(w_dilate, dim=-1, keepdim=True).clamp_min(eps)
     return t_dilate, w_dilate
 
 
@@ -167,12 +233,12 @@ def invert_cdf(u, t, w_logits, use_gpu_resampling=False):
 
 
 def sample(
-    t,
-    w_logits,
-    num_samples,
-    single_jitter=False,
-    deterministic_center=False,
-    use_gpu_resampling=False
+        t,
+        w_logits,
+        num_samples,
+        single_jitter=False,
+        deterministic_center=False,
+        use_gpu_resampling=False
 ):
     """Piecewise-Constant PDF sampling from a step function.
 
@@ -208,12 +274,12 @@ def sample(
 
 
 def sample_intervals(
-    t,
-    w_logits,
-    num_samples,
-    single_jitter=False,
-    domain=(-torch.tensor(float('inf')), torch.tensor(float('inf'))),
-    use_gpu_resampling=False
+        t,
+        w_logits,
+        num_samples,
+        single_jitter=False,
+        domain=(-torch.tensor(float('inf')), torch.tensor(float('inf'))),
+        use_gpu_resampling=False
 ):
     """Sample *intervals* (rather than points) from a step function.
 
@@ -268,7 +334,7 @@ def lossfun_distortion(t, w):
         w * torch.sum(w[..., None, :] * dut, dim=-1), dim=-1)
 
     # The loss incurred within each individual interval with itself.
-    loss_intra = torch.sum(w**2 * (t[..., 1:] - t[..., :-1]), dim=-1) / 3
+    loss_intra = torch.sum(w ** 2 * (t[..., 1:] - t[..., :-1]), dim=-1) / 3
 
     return loss_inter + loss_intra
 
@@ -280,11 +346,11 @@ def interval_distortion(t0_lo, t0_hi, t1_lo, t1_hi):
 
     # Distortion when the intervals overlap.
     d_overlap = (
-        2 * (torch.minimum(t0_hi, t1_hi)**3 - torch.maximum(t0_lo, t1_lo)**3) +
-        3 * (t1_hi * t0_hi * torch.abs(t1_hi - t0_hi) +
-             t1_lo * t0_lo * torch.abs(t1_lo - t0_lo) + t1_hi * t0_lo *
-             (t0_lo - t1_hi) + t1_lo * t0_hi *
-             (t1_lo - t0_hi))) / (6 * (t0_hi - t0_lo) * (t1_hi - t1_lo))
+                        2 * (torch.minimum(t0_hi, t1_hi) ** 3 - torch.maximum(t0_lo, t1_lo) ** 3) +
+                        3 * (t1_hi * t0_hi * torch.abs(t1_hi - t0_hi) +
+                             t1_lo * t0_lo * torch.abs(t1_lo - t0_lo) + t1_hi * t0_lo *
+                             (t0_lo - t1_hi) + t1_lo * t0_hi *
+                             (t1_lo - t0_hi))) / (6 * (t0_hi - t0_lo) * (t1_hi - t1_lo))
 
     # Are the two intervals not overlapping?
     are_disjoint = (t0_lo > t1_hi) | (t1_lo > t0_hi)
@@ -295,6 +361,7 @@ def interval_distortion(t0_lo, t0_hi, t1_lo, t1_hi):
 def weighted_percentile(t, w, ps):
     """Compute the weighted percentiles of a step function. w's must sum to 1."""
     cw = integrate_weights(w)
+
     # We want to interpolate into the integrated weights according to `ps`.
 
     def fn(cw_i, t_i):
@@ -337,13 +404,13 @@ def resample(t, tp, vp, use_avg=False,
 
     acc = torch.cumsum(vp, dim=-1)
     acc0 = torch.cat([torch.zeros(acc.shape[:-1] + (1,)), acc], dim=-1)
-    
+
     if len(acc0.shape) == 2:
         acc0_resampled = torch.stack([
             math.interp(t, tp, acc0[dim]) for dim in range(len(acc0))], dim=0)
     else:
         acc0_resampled = math.interp(t, tp, acc0)
-        
+
     v = torch.diff(acc0_resampled, dim=-1)
-    
+
     return v

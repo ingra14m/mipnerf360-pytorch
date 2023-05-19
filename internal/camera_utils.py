@@ -25,6 +25,7 @@ from internal import stepfun
 from internal import utils
 import numpy as np
 import scipy
+
 _Array = Union[np.ndarray, torch.tensor]
 
 
@@ -88,8 +89,8 @@ def convert_to_ndc(origins: _Array,
     # Perspective projection into NDC for the t = infinity far points
     #     origins + infinity * directions
     infinity_ndc = xnp.stack([xmult * dx / dz, ymult * dy / dz,
-                             xnp.ones_like(oz)],
-                            axis=-1)
+                              xnp.ones_like(oz)],
+                             axis=-1)
 
     # directions_ndc points from origins_ndc to infinity_ndc
     directions_ndc = infinity_ndc - origins_ndc
@@ -167,7 +168,7 @@ def generate_spiral_path(poses: np.ndarray,
     far_bound = bounds.max() * FAR_STRETCH
     # All cameras will point towards the world space point (0, 0, -focal).
     focal = 1 / (((1 - FOCUS_DISTANCE) / near_bound +
-                 FOCUS_DISTANCE / far_bound))
+                  FOCUS_DISTANCE / far_bound))
 
     # Get radii for spiral path using 90th percentile of camera positions.
     positions = poses[:, :3, 3]
@@ -227,11 +228,7 @@ def transform_poses_pca(poses: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return poses_recentered, transform
 
 
-def generate_ellipse_path(poses: np.ndarray,
-                          n_frames: int = 120,
-                          const_speed: bool = True,
-                          z_variation: float = 0.,
-                          z_phase: float = 0.) -> np.ndarray:
+def generate_ellipse_path(poses, n_frames=120, const_speed=True, z_variation=0., z_phase=0.):
     """Generate an elliptical render path based on the given poses."""
     # Calculate the focal point for the path (cameras point toward this).
     center = focus_point_fn(poses)
@@ -263,7 +260,7 @@ def generate_ellipse_path(poses: np.ndarray,
     if const_speed:
         # Resample theta angles so that the velocity is closer to constant.
         lengths = np.linalg.norm(positions[1:] - positions[:-1], axis=-1)
-        theta = stepfun.sample(theta, np.log(lengths), n_frames + 1)
+        theta = stepfun.sample_np(None, theta, np.log(lengths), n_frames + 1)
         positions = get_positions(theta)
 
     # Throw away duplicated last position.
@@ -341,9 +338,9 @@ def interpolate_1d(x: np.ndarray,
 
 
 def create_render_spline_path(
-    config: configs.Config,
-    image_names: Union[Text, List[Text]],
-    poses: np.ndarray,
+        config: configs.Config,
+        image_names: Union[Text, List[Text]],
+        poses: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     """Creates spline interpolation render path from subset of dataset poses.
 
@@ -407,16 +404,16 @@ def pixel_coordinates(width: int,
 
 
 def _compute_residual_and_jacobian(
-    x: _Array,
-    y: _Array,
-    xd: _Array,
-    yd: _Array,
-    k1: float = 0.0,
-    k2: float = 0.0,
-    k3: float = 0.0,
-    k4: float = 0.0,
-    p1: float = 0.0,
-    p2: float = 0.0,
+        x: _Array,
+        y: _Array,
+        xd: _Array,
+        yd: _Array,
+        k1: float = 0.0,
+        k2: float = 0.0,
+        k3: float = 0.0,
+        k4: float = 0.0,
+        p1: float = 0.0,
+        p2: float = 0.0,
 ) -> Tuple[_Array, _Array, _Array, _Array, _Array, _Array]:
     """Auxiliary function of radial_and_tangential_undistort()."""
     # Adapted from https://github.com/google/nerfies/blob/main/nerfies/camera.py
@@ -500,14 +497,14 @@ class ProjectionType(enum.Enum):
 
 
 def pixels_to_rays(
-    pix_x_int: _Array,
-    pix_y_int: _Array,
-    pixtocams: _Array,
-    camtoworlds: _Array,
-    distortion_params: Optional[Mapping[str, float]] = None,
-    pixtocam_ndc: Optional[_Array] = None,
-    camtype: ProjectionType = ProjectionType.PERSPECTIVE,
-    xnp: types.ModuleType = np,
+        pix_x_int: _Array,
+        pix_y_int: _Array,
+        pixtocams: _Array,
+        camtoworlds: _Array,
+        distortion_params: Optional[Mapping[str, float]] = None,
+        pixtocam_ndc: Optional[_Array] = None,
+        camtype: ProjectionType = ProjectionType.PERSPECTIVE,
+        xnp: types.ModuleType = np,
 ) -> Tuple[_Array, _Array, _Array, _Array, _Array]:
     """Calculates rays given pixel coordinates, intrinisics, and extrinsics.
 
@@ -538,6 +535,7 @@ def pixels_to_rays(
         imageplane will be the xy coordinates of a pixel in that space (so the
         camera ray direction at the origin would be (x, y, -1) in OpenGL coords).
     """
+
     # Must add half pixel offset to shoot rays through pixel centers.
     def pix_to_dir(x, y):
         return xnp.stack([x + .5, y + .5, xnp.ones_like(x)], axis=-1)
@@ -578,7 +576,7 @@ def pixels_to_rays(
 
     # Flip from OpenCV to OpenGL coordinate system.
     camera_dirs_stacked = xnp.matmul(camera_dirs_stacked,
-                                 xnp.diag(xnp.array([1., -1., -1.])))
+                                     xnp.diag(xnp.array([1., -1., -1.])))
 
     # Extract 2D image plane (x, y) coordinates.
     imageplane = camera_dirs_stacked[0, ..., :2]
@@ -642,6 +640,7 @@ def cast_ray_batch(
 
     # pixels.cam_idx has shape [..., 1], remove this hanging dimension.
     cam_idx = pixels.cam_idx[..., 0]
+
     def batch_index(arr):
         return arr if arr.ndim == 2 else arr[cam_idx]
 
@@ -687,6 +686,7 @@ def cast_pinhole_rays(camtoworld: _Array,
 
     def broadcast_scalar(x): return xnp.broadcast_to(
         x, pix_x_int.shape)[..., None]
+
     ray_kwargs = {
         'lossmult': broadcast_scalar(1.),
         'near': broadcast_scalar(near),
@@ -736,6 +736,7 @@ def cast_spherical_rays(camtoworld: _Array,
 
     def broadcast_scalar(x): return xnp.broadcast_to(
         x, radii.shape[:-1])[..., None]
+
     ray_kwargs = {
         'lossmult': broadcast_scalar(1.),
         'near': broadcast_scalar(near),

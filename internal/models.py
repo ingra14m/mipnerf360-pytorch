@@ -179,8 +179,7 @@ class Model(nn.Module):
                     sdist,
                     weights,
                     dilation,
-                    domain=(torch.tensor(self.init_s_near),
-                            torch.tensor(self.init_s_far)),
+                    domain=(self.init_s_near, self.init_s_far),
                     renormalize=True)
                 sdist = sdist[..., 1:-1]
                 weights = weights[..., 1:-1]
@@ -198,7 +197,7 @@ class Model(nn.Module):
             logits_resample = torch.where(
                 sdist[..., 1:] > sdist[..., :-1],
                 anneal * torch.log(weights + self.resample_padding),
-                -torch.tensor(float('inf')))
+                torch.full_like(sdist[..., :-1], -torch.inf))
 
             # Draw sampled intervals from each ray's current weights.
             # Optimization will usually go nonlinear if you propagate gradients

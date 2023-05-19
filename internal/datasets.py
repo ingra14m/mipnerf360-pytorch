@@ -554,7 +554,8 @@ class LLFF(Dataset):
         """Load images from disk."""
         # Set up scaling factor.
         image_dir_suffix = ''
-        # Use downsampling factor
+        # Use downsampling factor (unless loading training split for raw dataset,
+        # we train raw at full resolution because of the Bayer mosaic pattern).
         if config.factor > 0:
             image_dir_suffix = f'_{config.factor}'
             factor = config.factor
@@ -574,10 +575,9 @@ class LLFF(Dataset):
 
         # Previous NeRF results were generated with images sorted by filename,
         # use this flag to ensure metrics are reported on the same test set.
-        if config.load_alphabetical:
-            inds = np.argsort(image_names)
-            image_names = [image_names[i] for i in inds]
-            poses = poses[inds]
+        inds = np.argsort(image_names)
+        image_names = [image_names[i] for i in inds]
+        poses = poses[inds]
 
         # Scale the inverse intrinsics matrix by the image downsampling factor.
         pixtocam = pixtocam @ np.diag([factor, factor, 1.])
@@ -602,19 +602,10 @@ class LLFF(Dataset):
         images = [utils.load_img(x) for x in image_paths]
         images = np.stack(images, axis=0) / 255.
 
-        # mask background if flag is set
-        if config.llff_white_background:
-            mask_dir = os.path.join(self.data_dir, 'masks')
-            mask_paths = [os.path.join(mask_dir, colmap_to_image[f].replace('png', 'jpg'))
-                          for f in image_names]
-            image_size = images[0].shape[:2]
-            try:
-                masks = [cv2.resize(utils.load_img(x), image_size[::-1])
-                         for x in mask_paths]
-                alphas = np.expand_dims(np.stack(masks, axis=0), -1) / 255.
-                images = images * alphas + (1. - alphas)  # remove background
-            except FileNotFoundError as err:
-                print('Masks not found [%s]' % err)
+        # # EXIF data is usually only present in the original JPEG images.
+        # jpeg_paths = [os.path.join(colmap_image_dir, f) for f in image_names]
+        # exifs = [utils.load_exif(x) for x in jpeg_paths]
+        # self.exifs = exifs
 
         # Load bounds if possible (only used in forward facing scenes).
         posefile = os.path.join(self.data_dir, 'poses_bounds.npy')
@@ -648,8 +639,8 @@ class LLFF(Dataset):
             self.colmap_to_world_transform = transform
             if config.render_spline_keyframes is not None:
                 rets = camera_utils.create_render_spline_path(config, image_names,
-                                                              poses)
-                self.spline_indices, self.render_poses, _ = rets
+                                                              poses, self.exposures)
+                self.spline_indices, self.render_poses, self.render_exposures = rets
             else:
                 # Automatically generated inward-facing elliptical render path.
                 self.render_poses = camera_utils.generate_ellipse_path(
@@ -658,23 +649,31 @@ class LLFF(Dataset):
                     z_variation=config.z_variation,
                     z_phase=config.z_phase)
 
-        self.poses = poses
-
         # Select the split.
-        all_indices = np.arange(images.shape[0])
+        all_indices = np.arange(len(image_names))
         if config.llff_use_all_images_for_training:
             train_indices = all_indices
         else:
             train_indices = all_indices % config.llffhold != 0
+        if config.llff_use_all_images_for_testing:
+            test_indices = all_indices
+        else:
+            test_indices = all_indices % config.llffhold == 0
         split_indices = {
-            utils.DataSplit.TEST: all_indices[all_indices % config.llffhold == 0],
-            utils.DataSplit.TRAIN: train_indices,
+            utils.DataSplit.TEST: all_indices[test_indices],
+            utils.DataSplit.TRAIN: all_indices[train_indices],
         }
         indices = split_indices[self.split]
-        # All per-image quantities must be re-indexed using the split indices.
         images = images[indices]
         poses = poses[indices]
+        # if self.split == utils.DataSplit.TRAIN:
+        #     # load different training data on different rank
+        #     local_indices = [i for i in range(len(image_names)) if (i + self.local_rank) % self.world_size == 0]
+        #     image_names = [image_names[i] for i in local_indices]
+        #     poses = poses[local_indices]
+        #     indices = local_indices
 
+        self.poses = poses
         self.images = images
         self.camtoworlds = self.render_poses if config.render_path else poses
         self.height, self.width = images.shape[1:3]
