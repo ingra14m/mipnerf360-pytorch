@@ -102,8 +102,8 @@ def main(unused_argv):
         handlers=[logging.FileHandler(logfile), logging.StreamHandler(sys.stdout)])
 
     # print the number of parameters of the model
-    num_params = sum(p.numel() for p in model.parameters())
-    logging.info(f'Number of parameters being optimized: {num_params}')
+    # num_params = sum(p.numel() for p in model.parameters())
+    # logging.info(f'Number of parameters being optimized: {num_params}')
 
     # Resume training at the step of the last checkpoint.
     init_step = state['step'] + 1
@@ -200,7 +200,7 @@ def main(unused_argv):
                     summary_writer.add_scalar(f'train_avg_{k}', v, step)
                 for k, v in max_stats.items():
                     summary_writer.add_scalar(f'train_max_{k}', v, step)
-                summary_writer.add_scalar('train_num_params', num_params, step)
+                # summary_writer.add_scalar('train_num_params', num_params, step)
                 summary_writer.add_scalar('train_learning_rate', *lr_scheduler.get_last_lr(), step)
 
                 summary_writer.add_scalar('train_steps_per_sec', steps_per_sec, step)
