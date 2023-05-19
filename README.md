@@ -1,4 +1,4 @@
-# Mip-Nerf 360-pytorch: An unofficial port of the JAX-based Ref-NeRF code release to PyTorch
+# Mip-Nerf 360-pytorch: An unofficial port of the JAX-based Mip-NeRF 360 code release to PyTorch
 
 You can find the original jax version released by Google at [https://github.com/google-research/multinerf](https://github.com/google-research/multinerf)
 
