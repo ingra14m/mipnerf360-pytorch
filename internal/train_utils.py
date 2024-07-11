@@ -102,8 +102,8 @@ def interlevel_loss(ray_history, config):
 def distortion_loss(ray_history, config):
     """Computes the distortion loss regularizer defined in mip-NeRF 360."""
     last_ray_results = ray_history[-1]
-    c = last_ray_results['sdist'].detach()
-    w = last_ray_results['weights'].detach()
+    c = last_ray_results['sdist']
+    w = last_ray_results['weights']
     loss = torch.mean(stepfun.lossfun_distortion(c, w))
     return config.distortion_loss_mult * loss
 
